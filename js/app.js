@@ -293,7 +293,7 @@
       });
     }
 
-    static parseFile(file) {
+    static parseFile(file, eventName) {
       return new Promise((resolve, reject) => {
         // @ts-ignore
         if (typeof Papa === "undefined") {
@@ -308,7 +308,7 @@
           transformHeader: (h) => h.trim(),
           complete: (results) => {
             try {
-              const rows = this.normalize(results.data, file.name);
+              const rows = this.normalize(results.data, file.name, eventName);
               resolve({
                 fileName: file.name,
                 allRows: rows,
@@ -323,7 +323,7 @@
       });
     }
 
-    static normalize(dataRows, fileName) {
+    static normalize(dataRows, fileName, eventName) {
       if (!dataRows || !Array.isArray(dataRows)) return [];
 
       return dataRows.map((row, idx) => {
@@ -333,7 +333,9 @@
         const timestamp = this.extractTimestamp(row);
         const college = row.college || "";
         const orderId = row.ticket_code || row.event_register_id || row.order_id || `MMP-${idx + 1}`;
-        const finalEventName = row.ticket_name || row.event_name || this.inferName(fileName);
+        
+        const finalEventName = eventName || this.inferName(fileName);
+        const ticketType = row.ticket_name || row.event_name || "General Ticket";
 
         return {
           id: `tkt-${idx}-${Math.random().toString(36).substr(2, 6)}`,
@@ -343,6 +345,7 @@
           quantity,
           amount,
           eventName: finalEventName,
+          ticketType: ticketType,
           dateObj: timestamp.dateObj,
           dateFormatted: timestamp.formatted
         };
@@ -966,12 +969,22 @@
         container.innerHTML = `<div class="text-center text-muted">Parsing file contents...</div>`;
         try {
           const ticketTypes = await MakeMyPassParser.scanTicketTypes(currentFile);
-          container.innerHTML = `
+          const inferredName = MakeMyPassParser.inferName(currentFile.name);
+          
+          let html = `
+            <div style="margin-bottom:1rem;">
+              <strong class="text-gold" style="font-size:1.1rem;">Event Name</strong><br>
+              <small class="text-muted">This CSV file will be saved as a single event. All tickets will be grouped under this name.</small>
+            </div>
+            <div class="input-with-label mb-3">
+              <input type="text" id="masterEventNameInput" class="input-field" value="${inferredName}" style="width:100%; font-size:1.1rem; font-weight:bold;" />
+            </div>
             <div style="background:rgba(255, 183, 3, 0.08); border:1px solid rgba(255, 183, 3, 0.25); border-radius:var(--radius-md); padding:1rem; text-align:center;">
-              <strong class="text-gold" style="font-size:1.1rem; display:block; margin-bottom:0.5rem;">Detected Tickets:</strong>
+              <strong class="text-gold" style="font-size:1rem; display:block; margin-bottom:0.5rem;">Detected Tickets in this Event:</strong>
               <div style="font-weight:600; color:var(--text-bright); line-height:1.5;">${ticketTypes.join("<br/>")}</div>
             </div>
           `;
+          container.innerHTML = html;
         } catch (e) {
           console.error("Scan error", e);
           container.innerHTML = `<div class="text-danger">Failed to analyze file.</div>`;
@@ -991,6 +1004,14 @@
     btnConfirmFileEvent.addEventListener("click", async () => {
       if (!currentFile) return;
 
+      const eventNameInput = document.getElementById("masterEventNameInput");
+      const eventName = eventNameInput ? eventNameInput.value.trim() : MakeMyPassParser.inferName(currentFile.name);
+
+      if (!eventName) {
+        DashboardUI.showToast("Event name cannot be empty", "warning");
+        return;
+      }
+
       const overlay = document.getElementById("processingOverlay");
       const overlaySubtext = document.getElementById("processingSubtext");
       if (overlay) {
@@ -999,24 +1020,15 @@
       }
 
       try {
-        const parsed = await MakeMyPassParser.parseFile(currentFile);
+        const parsed = await MakeMyPassParser.parseFile(currentFile, eventName);
         if (overlay) overlaySubtext.textContent = `Syncing ${parsed.validCARows.length} records to Firestore...`;
         
-        // Group rows by event name
-        const rowsByEvent = {};
-        parsed.allRows.forEach(r => {
-          if (!rowsByEvent[r.eventName]) rowsByEvent[r.eventName] = [];
-          rowsByEvent[r.eventName].push(r);
-        });
-
-        for (const evName of Object.keys(rowsByEvent)) {
-          // Points parameter is no longer used, passing 0
-          await storage.uploadEventToFirestore(evName, 0, currentFile.name, rowsByEvent[evName]);
-        }
+        // Upload the entire CSV as a single event
+        await storage.uploadEventToFirestore(eventName, 0, currentFile.name, parsed.allRows);
         
         recalculateAll();
         
-        DashboardUI.showToast(`Processed & Synced ${Object.keys(rowsByEvent).length} ticket types to Firestore!`, "success");
+        DashboardUI.showToast(`Processed & Synced "${eventName}" to Firestore!`, "success");
       } catch (err) {
         console.error(err);
         DashboardUI.showToast(`Error parsing ${currentFile.name}`, "error");
