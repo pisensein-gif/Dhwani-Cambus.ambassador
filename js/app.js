@@ -270,7 +270,30 @@
   // 3. MAKE MY PASS CSV PARSER
   // -----------------------------------------------------------------------
   class MakeMyPassParser {
-    static parseFile(file, assignedEventName, assignedPoints) {
+    static scanTicketTypes(file) {
+      return new Promise((resolve, reject) => {
+        // @ts-ignore
+        if (typeof Papa === "undefined") return reject(new Error("PapaParse not loaded"));
+        // @ts-ignore
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: "greedy",
+          transformHeader: (h) => h.trim(),
+          complete: (results) => {
+            const types = new Set();
+            results.data.forEach(row => {
+              const name = row.ticket_name || row.event_name;
+              if (name) types.add(name);
+            });
+            if (types.size === 0) types.add(this.inferName(file.name));
+            resolve(Array.from(types));
+          },
+          error: reject
+        });
+      });
+    }
+
+    static parseFile(file, pointsMap) {
       return new Promise((resolve, reject) => {
         // @ts-ignore
         if (typeof Papa === "undefined") {
@@ -285,13 +308,12 @@
           transformHeader: (h) => h.trim(),
           complete: (results) => {
             try {
-              const rows = this.normalize(results.data, file.name, assignedEventName, assignedPoints);
+              const rows = this.normalize(results.data, file.name, pointsMap);
               resolve({
                 fileName: file.name,
                 allRows: rows,
                 validCARows: rows.filter(r => r.caCode),
-                eventName: assignedEventName,
-                eventPoints: assignedPoints
+                pointsMap: pointsMap
               });
             } catch (err) {
               reject(err);
@@ -302,7 +324,7 @@
       });
     }
 
-    static normalize(dataRows, fileName, eventName, pointsPerTicket) {
+    static normalize(dataRows, fileName, pointsMap) {
       if (!dataRows || !Array.isArray(dataRows)) return [];
 
       return dataRows.map((row, idx) => {
@@ -312,7 +334,9 @@
         const timestamp = this.extractTimestamp(row);
         const college = row.college || "";
         const orderId = row.ticket_code || row.event_register_id || row.order_id || `MMP-${idx + 1}`;
-        const finalEventName = eventName || row.ticket_name || row.event_name || this.inferName(fileName);
+        const finalEventName = row.ticket_name || row.event_name || this.inferName(fileName);
+
+        let pts = pointsMap && pointsMap[finalEventName] !== undefined ? pointsMap[finalEventName] : storage.getPointsForEvent(finalEventName);
 
         return {
           id: `tkt-${idx}-${Math.random().toString(36).substr(2, 6)}`,
@@ -322,7 +346,7 @@
           quantity,
           amount,
           eventName: finalEventName,
-          basePointsPerTicket: pointsPerTicket !== null && pointsPerTicket !== undefined ? Number(pointsPerTicket) : storage.getPointsForEvent(finalEventName),
+          basePointsPerTicket: Number(pts),
           dateObj: timestamp.dateObj,
           dateFormatted: timestamp.formatted
         };
@@ -925,76 +949,7 @@
     const btnCloseFileEventModal = document.getElementById("btnCloseFileEventModal");
     const btnCancelFileEvent = document.getElementById("btnCancelFileEvent");
     const btnConfirmFileEvent = document.getElementById("btnConfirmFileEvent");
-    const uploadModalFilename = document.getElementById("uploadModalFilename");
-    const modeExistingEvent = document.getElementById("modeExistingEvent");
-    const modeNewEvent = document.getElementById("modeNewEvent");
-    const sectionExistingEvent = document.getElementById("sectionExistingEvent");
-    const sectionNewEvent = document.getElementById("sectionNewEvent");
-    const savedEventsDropdown = document.getElementById("savedEventsDropdown");
-    const newEventNameInput = document.getElementById("newEventNameInput");
-    const eventPointsInput = document.getElementById("eventPointsInput");
-
-    let fileQueue = [];
-    let currentFile = null;
-
-    const updateEventMode = () => {
-      // @ts-ignore
-      if (modeExistingEvent.checked) {
-        sectionExistingEvent.style.display = "block";
-        sectionNewEvent.style.display = "none";
-        // @ts-ignore
-        const opt = savedEventsDropdown.options[savedEventsDropdown.selectedIndex];
-        // @ts-ignore
-        if (opt && opt.dataset.points) eventPointsInput.value = opt.dataset.points;
-      } else {
-        sectionExistingEvent.style.display = "none";
-        sectionNewEvent.style.display = "block";
-        // @ts-ignore
-        if (!newEventNameInput.value && currentFile) {
-          // @ts-ignore
-          newEventNameInput.value = MakeMyPassParser.inferName(currentFile.name);
-        }
-      }
-    };
-
-    modeExistingEvent.addEventListener("change", updateEventMode);
-    modeNewEvent.addEventListener("change", updateEventMode);
-
-    savedEventsDropdown.addEventListener("change", () => {
-      // @ts-ignore
-      const opt = savedEventsDropdown.options[savedEventsDropdown.selectedIndex];
-      // @ts-ignore
-      if (opt && opt.dataset.points) eventPointsInput.value = opt.dataset.points;
-    });
-
-    const populateDropdown = (inferred) => {
-      // @ts-ignore
-      savedEventsDropdown.innerHTML = "";
-      const events = Object.values(storage.eventDatasets);
-      let matchedIdx = 0;
-
-      events.forEach((ev, idx) => {
-        const opt = document.createElement("option");
-        opt.value = ev.eventName;
-        opt.textContent = `${ev.eventName} (${ev.points} pts / tkt)`;
-        opt.dataset.points = String(ev.points);
-        // @ts-ignore
-        savedEventsDropdown.appendChild(opt);
-
-        if (inferred && ev.eventName.toLowerCase().includes(inferred.toLowerCase())) {
-          matchedIdx = idx;
-        }
-      });
-
-      if (events.length > 0) {
-        // @ts-ignore
-        savedEventsDropdown.selectedIndex = matchedIdx;
-        // @ts-ignore
-        eventPointsInput.value = events[matchedIdx].points;
-      }
-    };
-
-    const processNextQueueItem = () => {
+    const processNextQueueItem = async () => {
       if (fileQueue.length === 0) {
         fileEventModal.classList.remove("active");
         currentFile = null;
@@ -1003,15 +958,35 @@
 
       currentFile = fileQueue.shift();
       uploadModalFilename.textContent = `Importing: ${currentFile.name}`;
-      const inferred = MakeMyPassParser.inferName(currentFile.name);
-      // @ts-ignore
-      newEventNameInput.value = inferred;
-      // @ts-ignore
-      modeExistingEvent.checked = true;
-
-      populateDropdown(inferred);
-      updateEventMode();
       fileEventModal.classList.add("active");
+
+      const container = document.getElementById("ticketTypesConfigContainer");
+      if (container) container.innerHTML = `<div class="text-center text-muted">Analyzing CSV...</div>`;
+
+      try {
+        const ticketTypes = await MakeMyPassParser.scanTicketTypes(currentFile);
+        if (container) {
+          container.innerHTML = "";
+          ticketTypes.forEach(type => {
+            const defaultPoints = storage.getPointsForEvent(type) || 25;
+            const rowHTML = `
+              <div class="input-with-label ticket-type-row" data-type="${type.replace(/"/g, '&quot;')}">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <label style="margin:0; font-weight:700;">${type}</label>
+                  <div style="display:flex; align-items:center; gap:0.5rem;">
+                    <input type="number" class="input-field ticket-pts-input" min="1" value="${defaultPoints}" style="width:100px; text-align:right; font-size:1.1rem; font-weight:700; color:var(--accent-gold);" />
+                    <span style="font-size:0.85rem; color:var(--text-secondary);">pts/tkt</span>
+                  </div>
+                </div>
+              </div>
+            `;
+            container.insertAdjacentHTML('beforeend', rowHTML);
+          });
+        }
+      } catch (e) {
+        console.error("Scan error", e);
+        if (container) container.innerHTML = `<div class="text-danger">Failed to analyze file.</div>`;
+      }
     };
 
     const closeEventModal = () => {
@@ -1025,15 +1000,13 @@
 
     btnConfirmFileEvent.addEventListener("click", async () => {
       if (!currentFile) return;
-      // @ts-ignore
-      const eventName = modeExistingEvent.checked ? savedEventsDropdown.value.trim() : newEventNameInput.value.trim();
-      if (!eventName) {
-        DashboardUI.showToast("Please enter or select an event name", "warning");
-        return;
-      }
 
-      // @ts-ignore
-      const points = Number(eventPointsInput.value) || 25;
+      const pointsMap = {};
+      document.querySelectorAll(".ticket-type-row").forEach(row => {
+        const type = row.getAttribute("data-type");
+        const pts = row.querySelector(".ticket-pts-input").value;
+        pointsMap[type] = Number(pts) || 25;
+      });
 
       const overlay = document.getElementById("processingOverlay");
       const overlaySubtext = document.getElementById("processingSubtext");
@@ -1043,20 +1016,24 @@
       }
 
       try {
-        const parsed = await MakeMyPassParser.parseFile(currentFile, eventName, points);
+        const parsed = await MakeMyPassParser.parseFile(currentFile, pointsMap);
         if (overlay) overlaySubtext.textContent = `Syncing ${parsed.validCARows.length} records to Firestore...`;
         
-        // Save to Firestore (replaces previous data if event already exists)
-        const isUpdate = storage.eventDatasets[eventName] !== undefined;
-        await storage.uploadEventToFirestore(eventName, points, currentFile.name, parsed.allRows);
+        // Group rows by event name
+        const rowsByEvent = {};
+        parsed.allRows.forEach(r => {
+          if (!rowsByEvent[r.eventName]) rowsByEvent[r.eventName] = [];
+          rowsByEvent[r.eventName].push(r);
+        });
+
+        for (const evName of Object.keys(rowsByEvent)) {
+          const pts = pointsMap[evName] || 25;
+          await storage.uploadEventToFirestore(evName, pts, currentFile.name, rowsByEvent[evName]);
+        }
         
         recalculateAll();
         
-        if (isUpdate) {
-          DashboardUI.showToast(`Updated [${eventName}] on Firestore (${parsed.validCARows.length} sales)! Previous data replaced.`, "success");
-        } else {
-          DashboardUI.showToast(`Uploaded [${eventName}] to Firestore (${parsed.validCARows.length} sales)!`, "success");
-        }
+        DashboardUI.showToast(`Processed & Synced ${Object.keys(rowsByEvent).length} ticket types to Firestore!`, "success");
       } catch (err) {
         console.error(err);
         DashboardUI.showToast(`Error parsing ${currentFile.name}`, "error");

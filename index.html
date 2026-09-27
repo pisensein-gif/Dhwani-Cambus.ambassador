@@ -288,36 +288,13 @@
       </div>
 
       <div class="modal-body">
-        <div class="config-card" style="margin-bottom: 1.25rem;">
-          <div class="upload-mode-toggle" style="display:flex; gap:1rem; margin-bottom:1rem;">
-            <label style="cursor:pointer; display:flex; align-items:center; gap:0.5rem; font-weight:600; color:var(--text-bright);">
-              <input type="radio" name="eventChoiceMode" id="modeExistingEvent" value="existing" checked /> Select Existing Event
-            </label>
-            <label style="cursor:pointer; display:flex; align-items:center; gap:0.5rem; font-weight:600; color:var(--text-bright);">
-              <input type="radio" name="eventChoiceMode" id="modeNewEvent" value="new" /> Create New Event
-            </label>
-          </div>
+        <p class="text-muted mb-3" style="font-size: 0.95rem;">
+          We detected the following ticket types in your CSV. Please configure the points awarded per ticket for each type. 
+          Previously saved points will be pre-filled automatically.
+        </p>
 
-          <!-- Existing Event Dropdown -->
-          <div id="sectionExistingEvent" class="input-with-label">
-            <label>Select Previously Created Event:</label>
-            <select id="savedEventsDropdown" class="select-input" style="width:100%; font-size:0.95rem; padding:0.65rem 1rem;"></select>
-          </div>
-
-          <!-- New Event Input -->
-          <div id="sectionNewEvent" class="input-with-label" style="display:none;">
-            <label>New Event Name:</label>
-            <input type="text" id="newEventNameInput" class="input-field" placeholder="e.g. Day 3 Pass, Proshow Night" style="width:100%; font-size:0.95rem;" />
-          </div>
-
-          <!-- Event Points Configuration -->
-          <div class="input-with-label mt-3">
-            <label>Points per Ticket Sold:</label>
-            <div style="display:flex; align-items:center; gap:0.5rem;">
-              <input type="number" id="eventPointsInput" class="input-field" min="1" value="25" style="width:120px; font-size:1.1rem; font-weight:700; color:var(--accent-gold);" />
-              <span style="font-size:0.85rem; color:var(--text-secondary);">points per ticket / seat</span>
-            </div>
-          </div>
+        <div class="config-card flex-column gap-3" style="margin-bottom: 1.25rem; max-height: 250px; overflow-y: auto;" id="ticketTypesConfigContainer">
+          <div class="text-center text-muted">Analyzing CSV...</div>
         </div>
 
         <div style="background:rgba(0, 242, 254, 0.08); border:1px solid rgba(0, 242, 254, 0.25); border-radius:var(--radius-md); padding:0.85rem 1rem; font-size:0.82rem; color:var(--text-secondary);">
