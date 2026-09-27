@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dhwani '26 — Campus Ambassador Leaderboard & Points Engine</title>
+  <meta name="description" content="Official Campus Ambassador calculation engine and leaderboard for Dhwani '26 cultural festival. Computes MakeMyPass ticket sales, event points, and peak-hour bonuses." />
+  
+  <!-- Google Fonts: Outfit & Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- CDN Libraries: Firebase App & Firestore, PapaParse, Lucide Icons, Canvas Confetti, Chart.js -->
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.9.0/firebase-firestore-compat.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <!-- Application Styles -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="glow-bg-mesh"></div>
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-section">
+        <div class="brand-badge">DHIST '26 FEST</div>
+        <div class="brand-title-wrap">
+          <h1 class="brand-title">DHWANI <span class="neon-text">'26</span></h1>
+          <span class="brand-subtitle">Campus Ambassador Calculation & Leaderboard Portal</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div class="db-status-badge" id="firebaseStatusBadge" title="Connected to dhwani-cambus-ambassidor Firestore">
+          <span class="status-dot"></span>
+          <span class="status-text" id="firebaseStatusText">Connecting Cloud...</span>
+        </div>
+        <button id="btnOpenAmbassadors" class="btn btn-secondary">
+          <i data-lucide="users"></i>
+          <span>Ambassadors Directory</span>
+        </button>
+        <button id="btnExportSummary" class="btn btn-primary">
+          <i data-lucide="download"></i>
+          <span>Export Leaderboard</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-content container">
+    <!-- Quick Stats Ribbon -->
+    <section class="stats-grid" id="statsSection">
+      <div class="stat-card glass-card">
+        <div class="stat-icon-wrap icon-purple">
+          <i data-lucide="users"></i>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Active Ambassadors</span>
+          <h3 class="stat-value" id="statActiveCAs">0</h3>
+          <span class="stat-sub" id="statTopCA">Top: --</span>
+        </div>
+      </div>
+
+      <div class="stat-card glass-card">
+        <div class="stat-icon-wrap icon-cyan">
+          <i data-lucide="ticket"></i>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Tickets Sold (CA)</span>
+          <h3 class="stat-value" id="statTicketsSold">0</h3>
+          <span class="stat-sub" id="statPeakTickets">⚡ 0 in Peak Hours</span>
+        </div>
+      </div>
+
+      <div class="stat-card glass-card">
+        <div class="stat-icon-wrap icon-gold">
+          <i data-lucide="zap"></i>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Total Points Awarded</span>
+          <h3 class="stat-value" id="statTotalPoints">0</h3>
+          <span class="stat-sub" id="statBonusPoints">⚡ 0 Bonus Points</span>
+        </div>
+      </div>
+
+      <div class="stat-card glass-card">
+        <div class="stat-icon-wrap icon-emerald">
+          <i data-lucide="indian-rupee"></i>
+        </div>
+        <div class="stat-info">
+          <span class="stat-label">Total Revenue</span>
+          <h3 class="stat-value" id="statTotalRevenue">₹0</h3>
+          <span class="stat-sub" id="statEventsCount">0 Events Processed</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Upload & File Management Section -->
+    <section class="upload-section glass-card" id="uploadCard">
+      <div class="upload-header">
+        <div>
+          <h2 class="section-title"><i data-lucide="file-spreadsheet"></i> MakeMyPass CSV Imports</h2>
+          <p class="section-desc">Upload one or multiple MakeMyPass event CSV export files. The system automatically reads coupon codes, timestamps, quantities, and amounts.</p>
+        </div>
+        <div class="upload-actions">
+          <button id="btnClearData" class="btn btn-sm btn-ghost text-danger" style="display:none;">
+            <i data-lucide="trash-2"></i> Clear All Data
+          </button>
+        </div>
+      </div>
+
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" multiple accept=".csv" class="file-input-hidden" />
+        <div class="drop-zone-content">
+          <div class="drop-zone-icon">
+            <i data-lucide="upload-cloud"></i>
+          </div>
+          <div class="drop-zone-text">
+            <p class="primary-text"><strong>Click to browse</strong> or drag & drop MakeMyPass CSV files here</p>
+            <p class="sub-text">Supports multiple event CSVs at once</p>
+          </div>
+          <div class="drop-zone-badge">
+            <i data-lucide="shield-check"></i> 100% Client-Side Processing • Data stays on your computer
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Podium Section (Top 3 CAs) -->
+    <section class="podium-section" id="podiumSection" style="display: none;">
+      <div class="section-header-center">
+        <span class="badge-tag">🏆 DHWANI '26 CHAMPIONS</span>
+        <h2 class="section-heading">Top Performing Ambassadors</h2>
+      </div>
+
+      <div class="podium-container">
+        <!-- Rank 2 (Silver) -->
+        <div class="podium-card podium-rank-2 glass-card" id="podiumRank2">
+          <div class="rank-badge silver">2</div>
+          <div class="avatar-ring silver-ring">
+            <span class="avatar-initials">CA</span>
+          </div>
+          <h3 class="ca-name">--</h3>
+          <span class="ca-code-badge">--</span>
+          <div class="podium-score">
+            <span class="score-points">0 <small>PTS</small></span>
+            <div class="score-meta">
+              <span>🎟️ 0 Tickets</span>
+              <span>⚡ 0 Peak</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rank 1 (Gold) -->
+        <div class="podium-card podium-rank-1 glass-card" id="podiumRank1">
+          <div class="crown-icon">👑</div>
+          <div class="rank-badge gold">1</div>
+          <div class="avatar-ring gold-ring">
+            <span class="avatar-initials">CA</span>
+          </div>
+          <h3 class="ca-name">--</h3>
+          <span class="ca-code-badge gold-pill">--</span>
+          <div class="podium-score">
+            <span class="score-points gold-glow">0 <small>PTS</small></span>
+            <div class="score-meta">
+              <span>🎟️ 0 Tickets</span>
+              <span>⚡ 0 Peak</span>
+            </div>
+          </div>
+          <div class="podium-ribbon">⭐ DHWANI LEADER ⭐</div>
+        </div>
+
+        <!-- Rank 3 (Bronze) -->
+        <div class="podium-card podium-rank-3 glass-card" id="podiumRank3">
+          <div class="rank-badge bronze">3</div>
+          <div class="avatar-ring bronze-ring">
+            <span class="avatar-initials">CA</span>
+          </div>
+          <h3 class="ca-name">--</h3>
+          <span class="ca-code-badge">--</span>
+          <div class="podium-score">
+            <span class="score-points">0 <small>PTS</small></span>
+            <div class="score-meta">
+              <span>🎟️ 0 Tickets</span>
+              <span>⚡ 0 Peak</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Master Leaderboard Section -->
+    <section class="leaderboard-section glass-card" id="leaderboardSection">
+      <div class="leaderboard-controls">
+        <div class="search-box">
+          <i data-lucide="search"></i>
+          <input type="text" id="searchInput" placeholder="Search CA by name or coupon code..." />
+          <button id="btnClearSearch" class="btn-icon-sm" style="display:none;" title="Clear search">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+
+        <div class="filters-row">
+          <div class="filter-group">
+            <label for="eventFilter"><i data-lucide="filter"></i> Event:</label>
+            <select id="eventFilter" class="select-input">
+              <option value="ALL">All Events</option>
+            </select>
+          </div>
+
+          <div class="filter-group">
+            <label for="sortBySelect"><i data-lucide="arrow-up-down"></i> Sort By:</label>
+            <select id="sortBySelect" class="select-input">
+              <option value="points_desc">Total Points (Highest First)</option>
+              <option value="tickets_desc">Tickets Sold (Highest First)</option>
+              <option value="peak_desc">Peak Registrations (Highest First)</option>
+              <option value="revenue_desc">Revenue Generated (Highest First)</option>
+              <option value="name_asc">CA Name (A-Z)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table Container -->
+      <div class="table-responsive">
+        <table class="leaderboard-table" id="leaderboardTable">
+          <thead>
+            <tr>
+              <th class="col-rank">Rank</th>
+              <th class="col-ca">Ambassador</th>
+              <th class="col-tickets text-center">Tickets Sold</th>
+              <th class="col-peak text-center">Peak Sales ⚡</th>
+              <th class="col-revenue text-right">Revenue Generated</th>
+              <th class="col-badges">Badges & Accolades</th>
+              <th class="col-points text-right">Total Points</th>
+              <th class="col-action text-center">Action</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboardBody">
+            <!-- Dynamic rows will be rendered here -->
+            <tr class="empty-state-row">
+              <td colspan="8">
+                <div class="empty-state">
+                  <div class="empty-icon"><i data-lucide="inbox"></i></div>
+                  <h4>No Data Loaded Yet</h4>
+                  <p>Upload your MakeMyPass CSV files above to see live calculations.</p>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Table Footer / Summary Bar -->
+      <div class="table-footer-bar" id="tableFooterBar" style="display:none;">
+        <div class="footer-count">
+          Showing <strong id="showingCount">0</strong> Campus Ambassadors
+        </div>
+        <div class="footer-note">
+          <span>* Click on any ambassador row to view detailed transaction breakdown & timeline.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Event Wise Breakdown & Insights Section -->
+    <section class="events-summary-section glass-card" id="eventsSummarySection" style="display:none;">
+      <div class="section-header-split">
+        <div>
+          <h3 class="section-title"><i data-lucide="layers"></i> Event-wise Points Matrix & Performance</h3>
+          <p class="section-desc">Overview of points allocated and tickets sold across each Dhwani '26 sub-event.</p>
+        </div>
+      </div>
+      <div class="events-grid" id="eventsGrid"></div>
+    </section>
+  </main>
+
+  <!-- Event Setup Modal on CSV Upload -->
+  <div class="modal-backdrop" id="fileEventModal" aria-hidden="true">
+    <div class="modal-dialog glass-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <i data-lucide="sparkles" class="modal-icon text-gold"></i>
+          <div>
+            <h3 class="modal-title">Configure Event & Points</h3>
+            <span class="modal-subtitle" id="uploadModalFilename">Importing: File.csv</span>
+          </div>
+        </div>
+        <button class="btn-close" id="btnCloseFileEventModal"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="config-card" style="margin-bottom: 1.25rem;">
+          <div class="upload-mode-toggle" style="display:flex; gap:1rem; margin-bottom:1rem;">
+            <label style="cursor:pointer; display:flex; align-items:center; gap:0.5rem; font-weight:600; color:var(--text-bright);">
+              <input type="radio" name="eventChoiceMode" id="modeExistingEvent" value="existing" checked /> Select Existing Event
+            </label>
+            <label style="cursor:pointer; display:flex; align-items:center; gap:0.5rem; font-weight:600; color:var(--text-bright);">
+              <input type="radio" name="eventChoiceMode" id="modeNewEvent" value="new" /> Create New Event
+            </label>
+          </div>
+
+          <!-- Existing Event Dropdown -->
+          <div id="sectionExistingEvent" class="input-with-label">
+            <label>Select Previously Created Event:</label>
+            <select id="savedEventsDropdown" class="select-input" style="width:100%; font-size:0.95rem; padding:0.65rem 1rem;"></select>
+          </div>
+
+          <!-- New Event Input -->
+          <div id="sectionNewEvent" class="input-with-label" style="display:none;">
+            <label>New Event Name:</label>
+            <input type="text" id="newEventNameInput" class="input-field" placeholder="e.g. Day 3 Pass, Proshow Night" style="width:100%; font-size:0.95rem;" />
+          </div>
+
+          <!-- Event Points Configuration -->
+          <div class="input-with-label mt-3">
+            <label>Points per Ticket Sold:</label>
+            <div style="display:flex; align-items:center; gap:0.5rem;">
+              <input type="number" id="eventPointsInput" class="input-field" min="1" value="25" style="width:120px; font-size:1.1rem; font-weight:700; color:var(--accent-gold);" />
+              <span style="font-size:0.85rem; color:var(--text-secondary);">points per ticket / seat</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:rgba(0, 242, 254, 0.08); border:1px solid rgba(0, 242, 254, 0.25); border-radius:var(--radius-md); padding:0.85rem 1rem; font-size:0.82rem; color:var(--text-secondary);">
+          <strong class="text-cyan">💡 Calculation Rules:</strong>
+          <ul style="margin-left:1.25rem; margin-top:0.35rem; line-height:1.5;">
+            <li>Only referral codes matching <strong><code>DCAxxx</code></strong> (e.g. <code>DCA006</code>, <code>DCA115</code>) are awarded points.</li>
+            <li>If a transaction contains multiple tickets (e.g. <code>no_of_tickets = 2</code>), the Campus Ambassador receives <strong>2 × Points</strong>.</li>
+            <li>Event points are stored automatically for future uploads and live recalculations.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btnCancelFileEvent" class="btn btn-secondary">Cancel</button>
+        <button id="btnConfirmFileEvent" class="btn btn-primary">
+          <i data-lucide="check-circle"></i> Save Event & Calculate
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Campus Ambassador Directory Modal -->
+  <div class="modal-backdrop" id="ambassadorDirModal" aria-hidden="true">
+    <div class="modal-dialog modal-lg glass-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <i data-lucide="users" class="modal-icon text-cyan"></i>
+          <div>
+            <h3 class="modal-title">Campus Ambassador Accounts & Directory</h3>
+            <span class="modal-subtitle">Manage Ambassador names, DCA referral codes, and saved account details</span>
+          </div>
+        </div>
+        <button class="btn-close" id="btnCloseAmbassadorDirModal"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Add / Quick-Edit Form -->
+        <div class="config-card" style="margin-bottom: 1.5rem;">
+          <h4 style="font-size: 0.95rem; color: var(--text-bright); margin-bottom: 0.75rem;">
+            <i data-lucide="user-plus" style="width: 16px; height: 16px; color: var(--accent-gold);"></i> Register / Update Ambassador
+          </h4>
+          <div style="display: grid; grid-template-columns: 140px 1fr 1fr auto; gap: 0.75rem; align-items: flex-end;">
+            <div class="input-with-label">
+              <label>CA Code (DCAxxx):</label>
+              <input type="text" id="dirInputCode" class="input-field" placeholder="e.g. DCA006" style="font-family: var(--font-mono); font-weight:700; text-transform: uppercase;" />
+            </div>
+            <div class="input-with-label">
+              <label>Ambassador Full Name:</label>
+              <input type="text" id="dirInputName" class="input-field" placeholder="e.g. Alan Jose" />
+            </div>
+            <div class="input-with-label">
+              <label>College / Institution (Optional):</label>
+              <input type="text" id="dirInputCollege" class="input-field" placeholder="e.g. CET Trivandrum" />
+            </div>
+            <button id="btnSaveAmbassadorProfile" class="btn btn-primary" style="height: 38px;">
+              <i data-lucide="plus"></i> Save
+            </button>
+          </div>
+        </div>
+
+        <!-- Ambassadors List Table -->
+        <div class="table-responsive max-h-300">
+          <table class="sub-table">
+            <thead>
+              <tr>
+                <th style="width: 130px;">CA Code</th>
+                <th>Ambassador Name</th>
+                <th>College / Info</th>
+                <th class="text-center" style="width: 110px;">Tickets Sold</th>
+                <th class="text-right" style="width: 120px;">Total Points</th>
+                <th class="text-center" style="width: 80px;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="ambassadorsDirBody">
+              <!-- Dynamically populated rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <span style="font-size: 0.8rem; color: var(--text-muted);">
+          * When uploading CSV files, names mapped here will automatically replace generic codes.
+        </span>
+        <button class="btn btn-secondary" id="btnCloseAmbassadorDirBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CA Drilldown Details Modal -->
+  <div class="modal-backdrop" id="caModal" aria-hidden="true">
+    <div class="modal-dialog modal-lg glass-card">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <div class="avatar-ring gold-ring sm" id="modalAvatarRing">
+            <span class="avatar-initials" id="modalInitials">CA</span>
+          </div>
+          <div>
+            <div class="flex-align-center gap-2">
+              <h3 class="modal-title" id="modalCAName">Ambassador Name</h3>
+              <span class="badge-rank" id="modalRankBadge">Rank #1</span>
+            </div>
+            <span class="ca-code-badge" id="modalCACode">CODE: DH-CA-001</span>
+          </div>
+        </div>
+        <button class="btn-close" id="btnCloseCAModal"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="modal-body">
+        <!-- CA Performance Stat Cards -->
+        <div class="ca-drilldown-stats">
+          <div class="ca-stat-item">
+            <span class="ca-stat-lbl">Total Points</span>
+            <span class="ca-stat-val text-gold" id="modalPoints">0</span>
+          </div>
+          <div class="ca-stat-item">
+            <span class="ca-stat-lbl">Total Tickets</span>
+            <span class="ca-stat-val text-cyan" id="modalTickets">0</span>
+          </div>
+          <div class="ca-stat-item">
+            <span class="ca-stat-lbl">Peak Registrations</span>
+            <span class="ca-stat-val text-purple" id="modalPeakCount">0</span>
+          </div>
+          <div class="ca-stat-item">
+            <span class="ca-stat-lbl">Total Revenue</span>
+            <span class="ca-stat-val text-emerald" id="modalRevenue">₹0</span>
+          </div>
+        </div>
+
+        <!-- Badges Earned -->
+        <div class="ca-badges-showcase mt-3" id="modalBadgesContainer"></div>
+
+        <!-- Performance Distribution Chart -->
+        <div class="ca-chart-wrap mt-4">
+          <h4 class="sub-heading"><i data-lucide="pie-chart"></i> Event Distribution & Points Contribution</h4>
+          <div class="chart-container-box">
+            <canvas id="caEventChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Transactions Breakdown Table -->
+        <div class="ca-transactions-wrap mt-4">
+          <h4 class="sub-heading"><i data-lucide="list"></i> Ticket Sales Breakdown</h4>
+          <div class="table-responsive max-h-300">
+            <table class="sub-table">
+              <thead>
+                <tr>
+                  <th>Event Name</th>
+                  <th>Date & Time</th>
+                  <th>Quantity</th>
+                  <th>Amount</th>
+                  <th>Peak Bonus?</th>
+                  <th class="text-right">Points Earned</th>
+                </tr>
+              </thead>
+              <tbody id="modalTransactionsBody">
+                <!-- Dynamic transaction rows -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnCloseCAModalBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Application Logic Scripts -->
+  <script src="js/app.js"></script>
+</body>
+</html>
