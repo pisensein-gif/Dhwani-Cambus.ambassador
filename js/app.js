@@ -971,20 +971,80 @@
           const ticketTypes = await MakeMyPassParser.scanTicketTypes(currentFile);
           const inferredName = MakeMyPassParser.inferName(currentFile.name);
           
+          const events = Object.values(storage.eventDatasets);
+          let hasEvents = events.length > 0;
+          let options = "";
+          events.forEach(ev => {
+            options += `<option value="${ev.eventName}">${ev.eventName}</option>`;
+          });
+
           let html = `
             <div style="margin-bottom:1rem;">
               <strong class="text-gold" style="font-size:1.1rem;">Event Name</strong><br>
               <small class="text-muted">This CSV file will be saved as a single event. All tickets will be grouped under this name.</small>
             </div>
-            <div class="input-with-label mb-3">
-              <input type="text" id="masterEventNameInput" class="input-field" value="${inferredName}" style="width:100%; font-size:1.1rem; font-weight:bold;" />
-            </div>
+          `;
+          
+          if (hasEvents) {
+             html += `
+              <div class="upload-mode-toggle" style="display:flex; gap:1rem; margin-bottom:1rem;">
+                <label style="cursor:pointer; display:flex; align-items:center; gap:0.5rem; font-weight:600; color:var(--text-bright);">
+                  <input type="radio" name="eventChoiceMode" id="modeExistingEvent" value="existing" checked /> Update Existing
+                </label>
+                <label style="cursor:pointer; display:flex; align-items:center; gap:0.5rem; font-weight:600; color:var(--text-bright);">
+                  <input type="radio" name="eventChoiceMode" id="modeNewEvent" value="new" /> Create New
+                </label>
+              </div>
+
+              <!-- Existing Event Dropdown -->
+              <div id="sectionExistingEvent" class="input-with-label mb-3">
+                <label>Select Previously Created Event:</label>
+                <select id="savedEventsDropdown" class="select-input" style="width:100%; font-size:0.95rem; padding:0.65rem 1rem;">
+                  ${options}
+                </select>
+              </div>
+
+              <!-- New Event Input -->
+              <div id="sectionNewEvent" class="input-with-label mb-3" style="display:none;">
+                <label>New Event Name:</label>
+                <input type="text" id="newEventNameInput" class="input-field" placeholder="e.g. Day 3 Pass" value="${inferredName}" style="width:100%; font-size:0.95rem;" />
+              </div>
+             `;
+          } else {
+             html += `
+              <div class="input-with-label mb-3">
+                <label>New Event Name:</label>
+                <input type="text" id="masterEventNameInput" class="input-field" value="${inferredName}" style="width:100%; font-size:1.1rem; font-weight:bold;" />
+              </div>
+             `;
+          }
+
+          html += `
             <div style="background:rgba(255, 183, 3, 0.08); border:1px solid rgba(255, 183, 3, 0.25); border-radius:var(--radius-md); padding:1rem; text-align:center;">
               <strong class="text-gold" style="font-size:1rem; display:block; margin-bottom:0.5rem;">Detected Tickets in this Event:</strong>
               <div style="font-weight:600; color:var(--text-bright); line-height:1.5;">${ticketTypes.join("<br/>")}</div>
             </div>
           `;
           container.innerHTML = html;
+
+          if (hasEvents) {
+            const modeExisting = document.getElementById("modeExistingEvent");
+            const modeNew = document.getElementById("modeNewEvent");
+            const secExisting = document.getElementById("sectionExistingEvent");
+            const secNew = document.getElementById("sectionNewEvent");
+            
+            const updateMode = () => {
+              if (modeExisting.checked) {
+                secExisting.style.display = "block";
+                secNew.style.display = "none";
+              } else {
+                secExisting.style.display = "none";
+                secNew.style.display = "block";
+              }
+            };
+            modeExisting.addEventListener("change", updateMode);
+            modeNew.addEventListener("change", updateMode);
+          }
         } catch (e) {
           console.error("Scan error", e);
           container.innerHTML = `<div class="text-danger">Failed to analyze file.</div>`;
@@ -1004,8 +1064,19 @@
     btnConfirmFileEvent.addEventListener("click", async () => {
       if (!currentFile) return;
 
-      const eventNameInput = document.getElementById("masterEventNameInput");
-      const eventName = eventNameInput ? eventNameInput.value.trim() : MakeMyPassParser.inferName(currentFile.name);
+      let eventName = "";
+      const modeExisting = document.getElementById("modeExistingEvent");
+      
+      if (modeExisting) {
+        if (modeExisting.checked) {
+          eventName = document.getElementById("savedEventsDropdown").value.trim();
+        } else {
+          eventName = document.getElementById("newEventNameInput").value.trim();
+        }
+      } else {
+        const eventNameInput = document.getElementById("masterEventNameInput");
+        eventName = eventNameInput ? eventNameInput.value.trim() : MakeMyPassParser.inferName(currentFile.name);
+      }
 
       if (!eventName) {
         DashboardUI.showToast("Event name cannot be empty", "warning");
