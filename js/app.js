@@ -60,24 +60,9 @@
 
   class FirestoreDataManager {
     constructor() {
-      this.eventsList = [
-        { name: "Day & Festival Pass", points: 25 },
-        { name: "Day 1 Pass", points: 15 },
-        { name: "Day 2 Pass", points: 20 },
-        { name: "Day 3 pass", points: 30 },
-        { name: "Proshow Night", points: 50 },
-        { name: "Choreonite Dance", points: 40 },
-        { name: "Battle of the Bands", points: 35 }
-      ];
+      this.eventsList = [];
 
-      this.ambassadorsMap = {
-        "DCA006": { code: "DCA006", name: "Alan Jose", college: "CET Trivandrum" },
-        "DCA115": { code: "DCA115", name: "Amala S Augustine", college: "SCT Pappanamcode" },
-        "DCA074": { code: "DCA074", name: "Archana Ajith", college: "LBSITW" },
-        "DCA213": { code: "DCA213", name: "Aaron Biju", college: "Marian Engineering" },
-        "DCA211": { code: "DCA211", name: "Amal Nizam", college: "Mar Ivanios" },
-        "DCA117": { code: "DCA117", name: "Ashna Francis", college: "SCT College" }
-      };
+      this.ambassadorsMap = {};
 
       this.eventDatasets = {};
       this.loadLocalBackup();
@@ -105,8 +90,7 @@
       if (this.eventDatasets[name] && this.eventDatasets[name].points) {
         return Number(this.eventDatasets[name].points);
       }
-      const found = this.eventsList.find(e => e.name.toLowerCase().trim() === lower);
-      return found ? Number(found.points) : 25;
+      return 25;
     }
 
     getAmbassadorName(code) {
@@ -558,8 +542,15 @@
       };
     }
 
-    static checkPeak(dateObj) {
-      if (!dateObj || isNaN(dateObj.getTime())) return { isPeak: false, bonus: 0 };
+    static checkPeak(dateInput) {
+      let dateObj = dateInput;
+      if (typeof dateInput === "string" || typeof dateInput === "number") {
+        dateObj = new Date(dateInput);
+      } else if (dateObj && typeof dateObj.toDate === "function") {
+        dateObj = dateObj.toDate();
+      }
+      if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return { isPeak: false, bonus: 0 };
+      
       const currentMin = dateObj.getHours() * 60 + dateObj.getMinutes();
 
       for (const w of PEAK_HOURS) {
@@ -1037,18 +1028,18 @@
     const populateDropdown = (inferred) => {
       // @ts-ignore
       savedEventsDropdown.innerHTML = "";
-      const events = storage.eventsList;
+      const events = Object.values(storage.eventDatasets);
       let matchedIdx = 0;
 
       events.forEach((ev, idx) => {
         const opt = document.createElement("option");
-        opt.value = ev.name;
-        opt.textContent = `${ev.name} (${ev.points} pts / tkt)`;
+        opt.value = ev.eventName;
+        opt.textContent = `${ev.eventName} (${ev.points} pts / tkt)`;
         opt.dataset.points = String(ev.points);
         // @ts-ignore
         savedEventsDropdown.appendChild(opt);
 
-        if (inferred && ev.name.toLowerCase().includes(inferred.toLowerCase())) {
+        if (inferred && ev.eventName.toLowerCase().includes(inferred.toLowerCase())) {
           matchedIdx = idx;
         }
       });
@@ -1102,8 +1093,16 @@
       // @ts-ignore
       const points = Number(eventPointsInput.value) || 25;
 
+      const overlay = document.getElementById("processingOverlay");
+      const overlaySubtext = document.getElementById("processingSubtext");
+      if (overlay) {
+        overlay.style.display = "flex";
+        overlaySubtext.textContent = `Analyzing ${currentFile.name}...`;
+      }
+
       try {
         const parsed = await MakeMyPassParser.parseFile(currentFile, eventName, points);
+        if (overlay) overlaySubtext.textContent = `Syncing ${parsed.validCARows.length} records to Firestore...`;
         
         // Save to Firestore (replaces previous data if event already exists)
         const isUpdate = storage.eventDatasets[eventName] !== undefined;
@@ -1119,6 +1118,8 @@
       } catch (err) {
         console.error(err);
         DashboardUI.showToast(`Error parsing ${currentFile.name}`, "error");
+      } finally {
+        if (overlay) overlay.style.display = "none";
       }
 
       processNextQueueItem();
