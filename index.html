@@ -74,7 +74,6 @@
         <div class="stat-info">
           <span class="stat-label">Tickets Sold (CA)</span>
           <h3 class="stat-value" id="statTicketsSold">0</h3>
-          <span class="stat-sub" id="statPeakTickets">⚡ 0 in Peak Hours</span>
         </div>
       </div>
 
@@ -85,7 +84,6 @@
         <div class="stat-info">
           <span class="stat-label">Total Points Awarded</span>
           <h3 class="stat-value" id="statTotalPoints">0</h3>
-          <span class="stat-sub" id="statBonusPoints">⚡ 0 Bonus Points</span>
         </div>
       </div>
 
@@ -152,7 +150,6 @@
             <span class="score-points">0 <small>PTS</small></span>
             <div class="score-meta">
               <span>🎟️ 0 Tickets</span>
-              <span>⚡ 0 Peak</span>
             </div>
           </div>
         </div>
@@ -170,7 +167,6 @@
             <span class="score-points gold-glow">0 <small>PTS</small></span>
             <div class="score-meta">
               <span>🎟️ 0 Tickets</span>
-              <span>⚡ 0 Peak</span>
             </div>
           </div>
           <div class="podium-ribbon">⭐ DHWANI LEADER ⭐</div>
@@ -188,7 +184,6 @@
             <span class="score-points">0 <small>PTS</small></span>
             <div class="score-meta">
               <span>🎟️ 0 Tickets</span>
-              <span>⚡ 0 Peak</span>
             </div>
           </div>
         </div>
@@ -219,7 +214,6 @@
             <select id="sortBySelect" class="select-input">
               <option value="points_desc">Total Points (Highest First)</option>
               <option value="tickets_desc">Tickets Sold (Highest First)</option>
-              <option value="peak_desc">Peak Registrations (Highest First)</option>
               <option value="revenue_desc">Revenue Generated (Highest First)</option>
               <option value="name_asc">CA Name (A-Z)</option>
             </select>
@@ -235,7 +229,6 @@
               <th class="col-rank">Rank</th>
               <th class="col-ca">Ambassador</th>
               <th class="col-tickets text-center">Tickets Sold</th>
-              <th class="col-peak text-center">Peak Sales ⚡</th>
               <th class="col-revenue text-right">Revenue Generated</th>
               <th class="col-badges">Badges & Accolades</th>
               <th class="col-points text-right">Total Points</th>
@@ -445,10 +438,6 @@
             <span class="ca-stat-val text-cyan" id="modalTickets">0</span>
           </div>
           <div class="ca-stat-item">
-            <span class="ca-stat-lbl">Peak Registrations</span>
-            <span class="ca-stat-val text-purple" id="modalPeakCount">0</span>
-          </div>
-          <div class="ca-stat-item">
             <span class="ca-stat-lbl">Total Revenue</span>
             <span class="ca-stat-val text-emerald" id="modalRevenue">₹0</span>
           </div>
@@ -476,7 +465,6 @@
                   <th>Date & Time</th>
                   <th>Quantity</th>
                   <th>Amount</th>
-                  <th>Peak Bonus?</th>
                   <th class="text-right">Points Earned</th>
                 </tr>
               </thead>

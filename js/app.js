@@ -44,11 +44,7 @@
   // Strict regex for valid CA codes (e.g., DCA006, DCA115, DCA213)
   const CA_REGEX = /^DCA[0-9A-Z]+$/i;
 
-  // Peak Hour Windows for Dhwani '26
-  const PEAK_HOURS = [
-    { name: "Evening Flash Sale (18:00 - 22:00)", startH: 18, startM: 0, endH: 22, endM: 0, bonus: 10, active: true },
-    { name: "Late Night Surge (22:00 - 23:59)", startH: 22, startM: 0, endH: 23, endM: 59, bonus: 15, active: true }
-  ];
+  // Peak Hour Windows for Dhwani '26 have been removed as per user request.
 
   // -----------------------------------------------------------------------
   // 2. CLOUD FIRESTORE DATA MANAGER & REALTIME SYNC
@@ -414,25 +410,17 @@
       const eventMap = new Map();
 
       let globalTickets = 0;
-      let globalPeakTickets = 0;
       let globalPoints = 0;
-      let globalBonusPoints = 0;
       let globalRevenue = 0;
 
       const validRows = allRows.filter(r => r.caCode);
 
       validRows.forEach(row => {
-        const peakMatch = this.checkPeak(row.dateObj);
-        const peakBonusPerTicket = peakMatch.isPeak ? peakMatch.bonus : 0;
-        const basePointsTotal = row.basePointsPerTicket * row.quantity;
-        const peakBonusTotal = peakBonusPerTicket * row.quantity;
-        const rowTotalPoints = basePointsTotal + peakBonusTotal;
+        const rowTotalPoints = row.basePointsPerTicket * row.quantity;
 
         globalTickets += row.quantity;
         globalRevenue += row.amount;
         globalPoints += rowTotalPoints;
-        globalBonusPoints += peakBonusTotal;
-        if (peakMatch.isPeak) globalPeakTickets += row.quantity;
 
         if (!caMap.has(row.caCode)) {
           caMap.set(row.caCode, {
@@ -441,8 +429,6 @@
             college: storage.ambassadorsMap[row.caCode]?.college || row.college || "",
             totalPoints: 0,
             totalTickets: 0,
-            peakTickets: 0,
-            peakBonusPoints: 0,
             totalRevenue: 0,
             events: {},
             transactions: [],
@@ -454,8 +440,6 @@
         ca.totalPoints += rowTotalPoints;
         ca.totalTickets += row.quantity;
         ca.totalRevenue += row.amount;
-        ca.peakBonusPoints += peakBonusTotal;
-        if (peakMatch.isPeak) ca.peakTickets += row.quantity;
 
         if (!ca.events[row.eventName]) {
           ca.events[row.eventName] = { tickets: 0, points: 0, revenue: 0 };
@@ -470,8 +454,6 @@
           dateFormatted: row.dateFormatted,
           quantity: row.quantity,
           amount: row.amount,
-          isPeak: peakMatch.isPeak,
-          bonusPoints: peakBonusTotal,
           totalPoints: rowTotalPoints
         });
 
@@ -499,18 +481,10 @@
         return b.totalRevenue - a.totalRevenue;
       });
 
-      let maxPeak = 0;
-      leaderboard.forEach(ca => {
-        if (ca.peakTickets > maxPeak) maxPeak = ca.peakTickets;
-      });
-
       leaderboard.forEach((ca, idx) => {
         ca.rank = idx + 1;
         ca.badges = [];
         if (ca.rank === 1) ca.badges.push({ text: "👑 Dhwani Leader", type: "champion" });
-        if (maxPeak > 0 && ca.peakTickets === maxPeak && ca.peakTickets >= 3) {
-          ca.badges.push({ text: "⚡ Rush Hour Master", type: "rush" });
-        }
         if (ca.totalTickets >= 25) {
           ca.badges.push({ text: "🎯 Top Performer (25+)", type: "century" });
         }
@@ -531,35 +505,11 @@
         summary: {
           totalCAs: leaderboard.length,
           totalTickets: globalTickets,
-          totalPeakTickets: globalPeakTickets,
           totalPoints: globalPoints,
-          totalBonusPoints: globalBonusPoints,
           totalRevenue: globalRevenue,
           topCA: leaderboard.length > 0 ? `${leaderboard[0].caName} (${leaderboard[0].caCode})` : "--"
         }
       };
-    }
-
-    static checkPeak(dateInput) {
-      let dateObj = dateInput;
-      if (typeof dateInput === "string" || typeof dateInput === "number") {
-        dateObj = new Date(dateInput);
-      } else if (dateObj && typeof dateObj.toDate === "function") {
-        dateObj = dateObj.toDate();
-      }
-      if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) return { isPeak: false, bonus: 0 };
-      
-      const currentMin = dateObj.getHours() * 60 + dateObj.getMinutes();
-
-      for (const w of PEAK_HOURS) {
-        if (!w.active) continue;
-        const startTotal = w.startH * 60 + w.startM;
-        const endTotal = w.endH * 60 + w.endM;
-        if (currentMin >= startTotal && currentMin <= endTotal) {
-          return { isPeak: true, bonus: w.bonus };
-        }
-      }
-      return { isPeak: false, bonus: 0 };
     }
   }
 
@@ -578,8 +528,6 @@
       document.getElementById("statTotalRevenue").textContent = `₹${summary.totalRevenue.toLocaleString()}`;
 
       document.getElementById("statTopCA").textContent = `Top: ${summary.topCA}`;
-      document.getElementById("statPeakTickets").textContent = `⚡ ${summary.totalPeakTickets} in Peak Hours`;
-      document.getElementById("statBonusPoints").textContent = `⚡ ${summary.totalBonusPoints} Bonus Points`;
       document.getElementById("statEventsCount").textContent = `${eventCount} Events in Firestore`;
     }
 
@@ -612,7 +560,7 @@
         card.querySelector(".ca-name").textContent = data.caName;
         card.querySelector(".ca-code-badge").textContent = data.caCode;
         card.querySelector(".score-points").innerHTML = `${data.totalPoints.toLocaleString()} <small>PTS</small>`;
-        card.querySelector(".score-meta").innerHTML = `<span>🎟️ ${data.totalTickets} Tickets</span><span>⚡ ${data.peakTickets} Peak</span>`;
+        card.querySelector(".score-meta").innerHTML = `<span>🎟️ ${data.totalTickets} Tickets</span>`;
 
         card.onclick = () => onSelectCA(data);
       });
@@ -672,7 +620,6 @@
         switch (sortBy) {
           case "points_desc": return pB - pA;
           case "tickets_desc": return tB - tA;
-          case "peak_desc": return b.peakTickets - a.peakTickets;
           case "revenue_desc": return rB - rA;
           case "name_asc": return a.caName.localeCompare(b.caName);
           default: return pB - pA;
@@ -723,7 +670,6 @@
               </div>
             </td>
             <td class="col-tickets text-center"><strong>${tickets}</strong></td>
-            <td class="col-peak text-center"><span class="text-purple font-mono font-bold">⚡ ${ca.peakTickets}</span></td>
             <td class="col-revenue text-right font-mono">₹${revenue.toLocaleString()}</td>
             <td class="col-badges"><div class="badges-wrap">${badgesHtml || "-"}</div></td>
             <td class="col-points text-right"><span class="points-pill">${points.toLocaleString()} <small>PTS</small></span></td>
@@ -871,7 +817,6 @@
 
       document.getElementById("modalPoints").textContent = ca.totalPoints.toLocaleString();
       document.getElementById("modalTickets").textContent = ca.totalTickets.toLocaleString();
-      document.getElementById("modalPeakCount").textContent = `⚡ ${ca.peakTickets} (+${ca.peakBonusPoints} pts)`;
       document.getElementById("modalRevenue").textContent = `₹${ca.totalRevenue.toLocaleString()}`;
 
       document.getElementById("modalBadgesContainer").innerHTML = ca.badges.map(b => `<span class="badge-tag-mini badge-${b.type}">${b.text}</span>`).join(" ");
@@ -885,7 +830,6 @@
           <td><small class="font-mono">${t.dateFormatted}</small></td>
           <td><strong>${t.quantity}</strong></td>
           <td class="font-mono">₹${t.amount.toLocaleString()}</td>
-          <td>${t.isPeak ? `<span class="text-purple font-bold">⚡ Yes (+${t.bonusPoints} pts)</span>` : '<span class="text-muted">No</span>'}</td>
           <td class="text-right"><span class="text-cyan font-bold">${t.totalPoints} pts</span></td>
         `;
         tbody.appendChild(tr);
@@ -1257,10 +1201,10 @@
         return;
       }
 
-      const rows = [["Rank", "Campus Ambassador Name", "CA Code", "College", "Total Points", "Tickets Sold", "Peak Hour Tickets", "Bonus Points", "Revenue (INR)", "Event Breakdown"].join(",")];
+      const rows = [["Rank", "Campus Ambassador Name", "CA Code", "College", "Total Points", "Tickets Sold", "Revenue (INR)", "Event Breakdown"].join(",")];
       res.leaderboard.forEach(ca => {
         const evStr = Object.entries(ca.events).map(([k, v]) => `${k}: ${v.tickets} tkts (${v.points} pts)`).join(" | ");
-        rows.push([ca.rank, `"${ca.caName}"`, `"${ca.caCode}"`, `"${ca.college}"`, ca.totalPoints, ca.totalTickets, ca.peakTickets, ca.peakBonusPoints, ca.totalRevenue, `"${evStr}"`].join(","));
+        rows.push([ca.rank, `"${ca.caName}"`, `"${ca.caCode}"`, `"${ca.college}"`, ca.totalPoints, ca.totalTickets, ca.totalRevenue, `"${evStr}"`].join(","));
       });
 
       const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
