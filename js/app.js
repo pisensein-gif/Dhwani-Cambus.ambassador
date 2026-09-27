@@ -949,6 +949,11 @@
     const btnCloseFileEventModal = document.getElementById("btnCloseFileEventModal");
     const btnCancelFileEvent = document.getElementById("btnCancelFileEvent");
     const btnConfirmFileEvent = document.getElementById("btnConfirmFileEvent");
+    const uploadModalFilename = document.getElementById("uploadModalFilename");
+
+    let fileQueue = [];
+    let currentFile = null;
+
     const processNextQueueItem = async () => {
       if (fileQueue.length === 0) {
         fileEventModal.classList.remove("active");
