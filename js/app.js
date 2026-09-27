@@ -34,10 +34,8 @@
       }
       // @ts-ignore
       db = firebase.firestore();
-      // Enable offline persistence if supported
-      try {
-        db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
-      } catch (e) {}
+      // Offline persistence is disabled to prevent deprecation warnings.
+      // Firestore will still work normally while online.
     }
   } catch (err) {
     console.error("Firebase init warning:", err);
