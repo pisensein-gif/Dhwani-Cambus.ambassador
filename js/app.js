@@ -293,7 +293,7 @@
       });
     }
 
-    static parseFile(file, pointsMap) {
+    static parseFile(file) {
       return new Promise((resolve, reject) => {
         // @ts-ignore
         if (typeof Papa === "undefined") {
@@ -308,12 +308,11 @@
           transformHeader: (h) => h.trim(),
           complete: (results) => {
             try {
-              const rows = this.normalize(results.data, file.name, pointsMap);
+              const rows = this.normalize(results.data, file.name);
               resolve({
                 fileName: file.name,
                 allRows: rows,
-                validCARows: rows.filter(r => r.caCode),
-                pointsMap: pointsMap
+                validCARows: rows.filter(r => r.caCode)
               });
             } catch (err) {
               reject(err);
@@ -324,7 +323,7 @@
       });
     }
 
-    static normalize(dataRows, fileName, pointsMap) {
+    static normalize(dataRows, fileName) {
       if (!dataRows || !Array.isArray(dataRows)) return [];
 
       return dataRows.map((row, idx) => {
@@ -336,8 +335,6 @@
         const orderId = row.ticket_code || row.event_register_id || row.order_id || `MMP-${idx + 1}`;
         const finalEventName = row.ticket_name || row.event_name || this.inferName(fileName);
 
-        let pts = pointsMap && pointsMap[finalEventName] !== undefined ? pointsMap[finalEventName] : storage.getPointsForEvent(finalEventName);
-
         return {
           id: `tkt-${idx}-${Math.random().toString(36).substr(2, 6)}`,
           orderId,
@@ -346,7 +343,6 @@
           quantity,
           amount,
           eventName: finalEventName,
-          basePointsPerTicket: Number(pts),
           dateObj: timestamp.dateObj,
           dateFormatted: timestamp.formatted
         };
@@ -440,7 +436,7 @@
       const validRows = allRows.filter(r => r.caCode);
 
       validRows.forEach(row => {
-        const rowTotalPoints = row.basePointsPerTicket * row.quantity;
+        const rowTotalPoints = Math.floor(row.amount / 10);
 
         globalTickets += row.quantity;
         globalRevenue += row.amount;
@@ -966,31 +962,20 @@
       fileEventModal.classList.add("active");
 
       const container = document.getElementById("ticketTypesConfigContainer");
-      if (container) container.innerHTML = `<div class="text-center text-muted">Analyzing CSV...</div>`;
-
-      try {
-        const ticketTypes = await MakeMyPassParser.scanTicketTypes(currentFile);
-        if (container) {
-          container.innerHTML = "";
-          ticketTypes.forEach(type => {
-            const defaultPoints = storage.getPointsForEvent(type) || 25;
-            const rowHTML = `
-              <div class="input-with-label ticket-type-row" data-type="${type.replace(/"/g, '&quot;')}">
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <label style="margin:0; font-weight:700;">${type}</label>
-                  <div style="display:flex; align-items:center; gap:0.5rem;">
-                    <input type="number" class="input-field ticket-pts-input" min="1" value="${defaultPoints}" style="width:100px; text-align:right; font-size:1.1rem; font-weight:700; color:var(--accent-gold);" />
-                    <span style="font-size:0.85rem; color:var(--text-secondary);">pts/tkt</span>
-                  </div>
-                </div>
-              </div>
-            `;
-            container.insertAdjacentHTML('beforeend', rowHTML);
-          });
+      if (container) {
+        container.innerHTML = `<div class="text-center text-muted">Parsing file contents...</div>`;
+        try {
+          const ticketTypes = await MakeMyPassParser.scanTicketTypes(currentFile);
+          container.innerHTML = `
+            <div style="background:rgba(255, 183, 3, 0.08); border:1px solid rgba(255, 183, 3, 0.25); border-radius:var(--radius-md); padding:1rem; text-align:center;">
+              <strong class="text-gold" style="font-size:1.1rem; display:block; margin-bottom:0.5rem;">Detected Tickets:</strong>
+              <div style="font-weight:600; color:var(--text-bright); line-height:1.5;">${ticketTypes.join("<br/>")}</div>
+            </div>
+          `;
+        } catch (e) {
+          console.error("Scan error", e);
+          container.innerHTML = `<div class="text-danger">Failed to analyze file.</div>`;
         }
-      } catch (e) {
-        console.error("Scan error", e);
-        if (container) container.innerHTML = `<div class="text-danger">Failed to analyze file.</div>`;
       }
     };
 
@@ -1006,13 +991,6 @@
     btnConfirmFileEvent.addEventListener("click", async () => {
       if (!currentFile) return;
 
-      const pointsMap = {};
-      document.querySelectorAll(".ticket-type-row").forEach(row => {
-        const type = row.getAttribute("data-type");
-        const pts = row.querySelector(".ticket-pts-input").value;
-        pointsMap[type] = Number(pts) || 25;
-      });
-
       const overlay = document.getElementById("processingOverlay");
       const overlaySubtext = document.getElementById("processingSubtext");
       if (overlay) {
@@ -1021,7 +999,7 @@
       }
 
       try {
-        const parsed = await MakeMyPassParser.parseFile(currentFile, pointsMap);
+        const parsed = await MakeMyPassParser.parseFile(currentFile);
         if (overlay) overlaySubtext.textContent = `Syncing ${parsed.validCARows.length} records to Firestore...`;
         
         // Group rows by event name
@@ -1032,8 +1010,8 @@
         });
 
         for (const evName of Object.keys(rowsByEvent)) {
-          const pts = pointsMap[evName] || 25;
-          await storage.uploadEventToFirestore(evName, pts, currentFile.name, rowsByEvent[evName]);
+          // Points parameter is no longer used, passing 0
+          await storage.uploadEventToFirestore(evName, 0, currentFile.name, rowsByEvent[evName]);
         }
         
         recalculateAll();
