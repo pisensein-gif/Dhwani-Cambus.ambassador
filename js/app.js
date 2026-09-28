@@ -440,10 +440,10 @@
       const datasets = Object.values(storage.eventDatasets);
       const allRows = [];
       datasets.forEach(ds => {
-        const currentPoints = storage.getPointsForEvent(ds.eventName);
+        const currentMultiplier = typeof ds.points === 'number' && ds.points > 0 ? ds.points : 10;
         if (Array.isArray(ds.rows)) {
           ds.rows.forEach(r => {
-            r.basePointsPerTicket = currentPoints;
+            r.multiplier = currentMultiplier;
             allRows.push(r);
           });
         }
@@ -463,7 +463,13 @@
       const validRows = allRows.filter(r => r.caCode);
 
       validRows.forEach(row => {
-        const rowTotalPoints = Math.floor(row.amount / 10);
+        let rowTotalPoints = 0;
+        if (row.overridePoints !== undefined) {
+          rowTotalPoints = row.overridePoints * row.quantity;
+        } else {
+          const multiplier = row.multiplier !== undefined ? row.multiplier : 10;
+          rowTotalPoints = Math.floor(row.amount * (multiplier / 100));
+        }
 
         globalTickets += row.quantity;
         globalRevenue += row.amount;
@@ -1044,11 +1050,21 @@
           }
 
           html += `
-            <div style="background:rgba(255, 183, 3, 0.08); border:1px solid rgba(255, 183, 3, 0.25); border-radius:var(--radius-md); padding:1rem; text-align:center;">
-              <strong class="text-gold" style="font-size:1rem; display:block; margin-bottom:0.5rem;">Detected Tickets in this Event:</strong>
-              <div style="font-weight:600; color:var(--text-bright); line-height:1.5;">${ticketTypes.join("<br/>")}</div>
-            </div>
+            <div style="background:rgba(255, 183, 3, 0.08); border:1px solid rgba(255, 183, 3, 0.25); border-radius:var(--radius-md); padding:1rem; text-align:left;">
+              <strong class="text-gold" style="font-size:1rem; display:block; margin-bottom:0.75rem;">Detected Tickets (Optional Point Overrides):</strong>
+              <small class="text-muted" style="display:block; margin-bottom:1rem;">By default, points are calculated as 10% of the ticket revenue. If you want to force a specific, fixed point value for a certain ticket type, enter it here. Otherwise, leave it blank.</small>
           `;
+          
+          ticketTypes.forEach(type => {
+            html += `
+              <div class="input-with-label ticket-override-row" data-ticket="${type.replace(/"/g, '&quot;')}" style="margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center;">
+                <label style="margin:0; font-weight:600; color:var(--text-bright);">${type}</label>
+                <input type="number" class="input-field override-input" placeholder="e.g. 50" min="0" style="width:120px; padding:0.4rem;" />
+              </div>
+            `;
+          });
+
+          html += `</div>`;
           container.innerHTML = html;
 
           if (hasEvents) {
@@ -1107,6 +1123,15 @@
         return;
       }
 
+      const ticketOverrides = {};
+      document.querySelectorAll(".ticket-override-row").forEach(row => {
+        const tkt = row.getAttribute("data-ticket");
+        const val = row.querySelector(".override-input").value.trim();
+        if (val !== "") {
+          ticketOverrides[tkt] = Number(val);
+        }
+      });
+
       const overlay = document.getElementById("processingOverlay");
       const overlaySubtext = document.getElementById("processingSubtext");
       if (overlay) {
@@ -1118,6 +1143,13 @@
         const parsed = await MakeMyPassParser.parseFile(currentFile, eventName);
         if (overlay) overlaySubtext.textContent = `Syncing ${parsed.validCARows.length} records to Firestore...`;
         
+        // Apply ticket overrides
+        parsed.allRows.forEach(r => {
+          if (ticketOverrides[r.ticketType] !== undefined) {
+            r.overridePoints = ticketOverrides[r.ticketType];
+          }
+        });
+
         // Upload the entire CSV as a single event
         await storage.uploadEventToFirestore(eventName, 0, currentFile.name, parsed.allRows);
         
