@@ -1234,6 +1234,121 @@
       recalculateAll();
     });
 
+    // Manual Entry Logic
+    const manualEntryModal = document.getElementById("manualEntryModal");
+    const btnManualEntry = document.getElementById("btnManualEntry");
+    
+    if (btnManualEntry && manualEntryModal) {
+      btnManualEntry.addEventListener("click", () => {
+        const events = Object.values(storage.eventDatasets);
+        const evSelect = document.getElementById("manualEventSelect");
+        if (events.length > 0) {
+          evSelect.innerHTML = events.map(ev => `<option value="${ev.eventName}">${ev.eventName}</option>`).join("");
+          document.getElementById("manualEventNew").style.display = "none";
+          evSelect.style.display = "block";
+          document.getElementById("btnToggleNewEvent").textContent = "+ Create New Event";
+          document.getElementById("btnToggleNewEvent").style.display = "inline";
+        } else {
+          document.getElementById("manualEventNew").style.display = "block";
+          evSelect.style.display = "none";
+          document.getElementById("btnToggleNewEvent").style.display = "none";
+        }
+        
+        document.getElementById("manualEventNew").value = "";
+        document.getElementById("manualCaCode").value = "";
+        document.getElementById("manualCaName").textContent = "";
+        document.getElementById("manualTicketType").value = "";
+        document.getElementById("manualQuantity").value = "1";
+        document.getElementById("manualAmount").value = "";
+        document.getElementById("manualPointsOverride").value = "";
+        
+        manualEntryModal.classList.add("active");
+      });
+      
+      document.getElementById("btnCloseManualModal").addEventListener("click", () => manualEntryModal.classList.remove("active"));
+      document.getElementById("btnCancelManual").addEventListener("click", () => manualEntryModal.classList.remove("active"));
+      
+      document.getElementById("btnToggleNewEvent").addEventListener("click", (e) => {
+        e.preventDefault();
+        const evSelect = document.getElementById("manualEventSelect");
+        const evNew = document.getElementById("manualEventNew");
+        if (evSelect.style.display === "none") {
+          evSelect.style.display = "block";
+          evNew.style.display = "none";
+          e.target.textContent = "+ Create New Event";
+        } else {
+          evSelect.style.display = "none";
+          evNew.style.display = "block";
+          e.target.textContent = "Use Existing Event";
+        }
+      });
+      
+      document.getElementById("manualCaCode").addEventListener("input", (e) => {
+        const code = e.target.value.trim().toUpperCase();
+        const nameEl = document.getElementById("manualCaName");
+        if (CA_REGEX.test(code) && storage.ambassadorsMap[code]) {
+          nameEl.textContent = storage.ambassadorsMap[code].name;
+        } else {
+          nameEl.textContent = "";
+        }
+      });
+
+      document.getElementById("btnSaveManual").addEventListener("click", async () => {
+        const evSelect = document.getElementById("manualEventSelect");
+        const evNew = document.getElementById("manualEventNew");
+        
+        let eventName = evSelect.style.display === "none" ? evNew.value.trim() : evSelect.value.trim();
+        
+        if (!eventName) {
+          DashboardUI.showToast("Please provide an Event Name.", "warning");
+          return;
+        }
+        
+        const caCode = document.getElementById("manualCaCode").value.trim().toUpperCase();
+        if (!CA_REGEX.test(caCode)) {
+          DashboardUI.showToast("Invalid CA Code format. Must start with DCA", "warning");
+          return;
+        }
+        
+        const ticketType = document.getElementById("manualTicketType").value.trim() || "Manual Ticket";
+        const quantity = parseInt(document.getElementById("manualQuantity").value) || 1;
+        const amount = parseFloat(document.getElementById("manualAmount").value) || 0;
+        const pointsOverrideStr = document.getElementById("manualPointsOverride").value.trim();
+        const overridePoints = pointsOverrideStr !== "" ? Number(pointsOverrideStr) : undefined;
+        
+        const newRow = {
+          id: `tkt-manual-${Math.random().toString(36).substr(2, 6)}`,
+          orderId: `MAN-` + Date.now().toString().slice(-6),
+          caCode: caCode,
+          college: storage.ambassadorsMap[caCode]?.college || "",
+          quantity: quantity,
+          amount: amount,
+          eventName: eventName,
+          ticketType: ticketType,
+          overridePoints: overridePoints,
+          dateFormatted: new Date().toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+          dateObj: new Date()
+        };
+        
+        let existingRows = [];
+        if (storage.eventDatasets[eventName] && storage.eventDatasets[eventName].rows) {
+          existingRows = storage.eventDatasets[eventName].rows;
+        }
+        existingRows.push(newRow);
+        
+        const multiplier = storage.eventDatasets[eventName]?.points || 10;
+        const fileName = storage.eventDatasets[eventName]?.fileName || "Manual Entry";
+        
+        document.getElementById("btnSaveManual").disabled = true;
+        await storage.uploadEventToFirestore(eventName, multiplier, fileName, existingRows);
+        document.getElementById("btnSaveManual").disabled = false;
+        
+        DashboardUI.showToast("Manual entry saved successfully!", "success");
+        manualEntryModal.classList.remove("active");
+        recalculateAll();
+      });
+    }
+
     // Ambassador Directory Modal
     const ambassadorDirModal = document.getElementById("ambassadorDirModal");
     const btnOpenAmbassadors = document.getElementById("btnOpenAmbassadors");

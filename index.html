@@ -41,6 +41,10 @@
           <span class="status-dot"></span>
           <span class="status-text" id="firebaseStatusText">Connecting Cloud...</span>
         </div>
+        <button id="btnManualEntry" class="btn btn-secondary" style="border: 1px solid var(--accent-gold); color: var(--accent-gold);">
+          <i data-lucide="plus-circle"></i>
+          <span>Manual Entry</span>
+        </button>
         <button id="btnOpenAmbassadors" class="btn btn-secondary">
           <i data-lucide="users"></i>
           <span>Ambassadors Directory</span>
@@ -315,6 +319,67 @@
         <button id="btnCancelFileEvent" class="btn btn-secondary">Cancel</button>
         <button id="btnConfirmFileEvent" class="btn btn-primary">
           <i data-lucide="check-circle"></i> Save Event & Calculate
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manual Entry Modal -->
+  <div class="modal-backdrop" id="manualEntryModal" aria-hidden="true">
+    <div class="modal-dialog glass-card" style="max-width: 550px;">
+      <div class="modal-header">
+        <div class="modal-title-wrap">
+          <i data-lucide="edit-3" class="modal-icon text-gold"></i>
+          <div>
+            <h3 class="modal-title">Manual Sales Entry</h3>
+            <span class="modal-subtitle">Log a ticket sale manually</span>
+          </div>
+        </div>
+        <button class="btn-close" id="btnCloseManualModal"><i data-lucide="x"></i></button>
+      </div>
+
+      <div class="modal-body">
+        <div class="input-with-label mb-3">
+          <label>Event <span class="text-danger">*</span></label>
+          <select id="manualEventSelect" class="select-input" style="width:100%; padding:0.65rem 1rem; margin-bottom: 0.5rem;"></select>
+          <input type="text" id="manualEventNew" class="input-field" placeholder="Or type a new event name..." style="width:100%; display:none;" />
+          <div style="text-align: right; margin-top: 0.25rem;">
+            <a href="#" id="btnToggleNewEvent" style="color: var(--accent-cyan); font-size: 0.85rem; text-decoration: none;">+ Create New Event</a>
+          </div>
+        </div>
+
+        <div class="input-with-label mb-3">
+          <label>Ambassador (CA Code) <span class="text-danger">*</span></label>
+          <input type="text" id="manualCaCode" class="input-field text-uppercase" placeholder="e.g. DCA006" style="width:100%; font-weight: bold;" />
+          <small id="manualCaName" class="text-gold" style="display: block; margin-top: 0.25rem; min-height: 18px;"></small>
+        </div>
+
+        <div class="input-with-label mb-3">
+          <label>Ticket Type <span class="text-danger">*</span></label>
+          <input type="text" id="manualTicketType" class="input-field" placeholder="e.g. Day 1 Pass" style="width:100%;" />
+        </div>
+
+        <div style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+          <div class="input-with-label" style="flex: 1;">
+            <label>Quantity <span class="text-danger">*</span></label>
+            <input type="number" id="manualQuantity" class="input-field" value="1" min="1" style="width:100%;" />
+          </div>
+          <div class="input-with-label" style="flex: 1;">
+            <label>Total Amount (₹) <span class="text-danger">*</span></label>
+            <input type="number" id="manualAmount" class="input-field" placeholder="e.g. 300" min="0" style="width:100%;" />
+          </div>
+        </div>
+
+        <div class="input-with-label mb-3">
+          <label>Override Points (Optional)</label>
+          <input type="number" id="manualPointsOverride" class="input-field" placeholder="Leave blank for automatic 10%" style="width:100%;" />
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnCancelManual">Cancel</button>
+        <button class="btn btn-primary" id="btnSaveManual">
+          <i data-lucide="check-circle"></i> Save Entry
         </button>
       </div>
     </div>
