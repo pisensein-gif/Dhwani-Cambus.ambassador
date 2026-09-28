@@ -262,6 +262,30 @@
         }
       }
     }
+
+    async publishLeaderboard(leaderboardData) {
+      if (!db) {
+        throw new Error("Firestore is not connected.");
+      }
+      try {
+        const docRef = db.collection("public_data").doc("leaderboard");
+        await docRef.set({
+          lastUpdated: new Date().toISOString(),
+          topAmbassadors: leaderboardData.map(ca => ({
+            name: ca.caName,
+            caCode: ca.caCode,
+            college: ca.college,
+            rank: ca.rank,
+            points: ca.totalPoints,
+            tickets: ca.totalTickets,
+            revenue: ca.totalRevenue
+          }))
+        });
+      } catch (err) {
+        console.error("Error publishing leaderboard:", err);
+        throw err;
+      }
+    }
   }
 
   const storage = new FirestoreDataManager();
@@ -1257,6 +1281,37 @@
       link.click();
       DashboardUI.showToast("Exported Leaderboard CSV successfully!", "success");
     });
+
+    const btnPublishWebsite = document.getElementById("btnPublishWebsite");
+    if (btnPublishWebsite) {
+      btnPublishWebsite.addEventListener("click", async () => {
+        const res = CalculationEngine.processAllSavedDatasets();
+        if (res.leaderboard.length === 0) {
+          DashboardUI.showToast("Leaderboard is empty. Nothing to publish.", "warning");
+          return;
+        }
+        
+        try {
+          const originalText = btnPublishWebsite.innerHTML;
+          btnPublishWebsite.innerHTML = '<i data-lucide="loader" class="spin"></i> <span>Publishing...</span>';
+          btnPublishWebsite.disabled = true;
+          // @ts-ignore
+          if (window.lucide) window.lucide.createIcons();
+
+          await storage.publishLeaderboard(res.leaderboard);
+          
+          DashboardUI.showToast("Leaderboard successfully published to Dhwani Website!", "success");
+        } catch (e) {
+          console.error(e);
+          DashboardUI.showToast("Failed to publish to website. Check console.", "error");
+        } finally {
+          btnPublishWebsite.innerHTML = '<i data-lucide="globe"></i> <span>Update Dhwani Website</span>';
+          btnPublishWebsite.disabled = false;
+          // @ts-ignore
+          if (window.lucide) window.lucide.createIcons();
+        }
+      });
+    }
 
     // CA Drilldown Modal Close
     const caModal = document.getElementById("caModal");
