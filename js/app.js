@@ -484,6 +484,7 @@
             totalTickets: 0,
             totalRevenue: 0,
             events: {},
+            ticketBreakdown: {},
             transactions: [],
             badges: []
           });
@@ -493,6 +494,11 @@
         ca.totalPoints += rowTotalPoints;
         ca.totalTickets += row.quantity;
         ca.totalRevenue += row.amount;
+
+        if (!ca.ticketBreakdown[row.ticketType]) {
+          ca.ticketBreakdown[row.ticketType] = 0;
+        }
+        ca.ticketBreakdown[row.ticketType] += row.quantity;
 
         if (!ca.events[row.eventName]) {
           ca.events[row.eventName] = { tickets: 0, points: 0, revenue: 0 };
@@ -504,6 +510,7 @@
         ca.transactions.push({
           orderId: row.orderId,
           eventName: row.eventName,
+          ticketType: row.ticketType,
           dateFormatted: row.dateFormatted,
           quantity: row.quantity,
           amount: row.amount,
@@ -879,7 +886,7 @@
       ca.transactions.forEach(t => {
         const tr = document.createElement("tr");
         tr.innerHTML = `
-          <td><strong>${t.eventName}</strong><br/><small class="text-muted font-mono">${t.orderId}</small></td>
+          <td><strong>${t.eventName}</strong><br/><small class="text-muted font-mono">${t.ticketType || "Unknown Ticket"} | ${t.orderId}</small></td>
           <td><small class="font-mono">${t.dateFormatted}</small></td>
           <td><strong>${t.quantity}</strong></td>
           <td class="font-mono">₹${t.amount.toLocaleString()}</td>
@@ -887,6 +894,21 @@
         `;
         tbody.appendChild(tr);
       });
+
+      const ticketBody = document.getElementById("modalTicketBreakdownBody");
+      if (ticketBody) {
+        ticketBody.innerHTML = "";
+        if (ca.ticketBreakdown) {
+          Object.entries(ca.ticketBreakdown).forEach(([tName, tCount]) => {
+            const tr = document.createElement("tr");
+            tr.innerHTML = `
+              <td><strong>${tName}</strong></td>
+              <td class="text-right"><strong>${tCount}</strong></td>
+            `;
+            ticketBody.appendChild(tr);
+          });
+        }
+      }
 
       this.renderChart(ca);
       modal.classList.add("active");
